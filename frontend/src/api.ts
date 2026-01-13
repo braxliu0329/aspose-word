@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8000/api';
+const API_BASE_URL = '/api';
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -16,21 +16,28 @@ export type HistoryInfo = {
 export type DocumentResponse = {
   html: string;
   history: HistoryInfo;
+  pageIndex?: number;
+  pageCount?: number;
   didUndo?: boolean;
   didRedo?: boolean;
 };
 
-export const fetchInitialHtml = async (): Promise<DocumentResponse> => {
-  const response = await api.get('/init');
+export const fetchInitialHtml = async (page?: number): Promise<DocumentResponse> => {
+  const response = await api.get('/init', { params: { page } });
   return response.data as DocumentResponse;
 };
 
-export const updateDocumentStyle = async (fontName?: string, fontSize?: number, color?: string): Promise<DocumentResponse> => {
+export const fetchPageHtml = async (page?: number): Promise<DocumentResponse> => {
+  const response = await api.get('/render', { params: { page } });
+  return response.data as DocumentResponse;
+};
+
+export const updateDocumentStyle = async (fontName?: string, fontSize?: number, color?: string, page?: number): Promise<DocumentResponse> => {
   const response = await api.post('/update', {
     font_name: fontName,
     font_size: fontSize,
     color: color,
-  });
+  }, { params: { page } });
   return response.data as DocumentResponse;
 };
 
@@ -40,7 +47,8 @@ export const updateNodeStyle = async (
   endOffset: number,
   fontName?: string, 
   fontSize?: number, 
-  color?: string
+  color?: string,
+  page?: number
 ): Promise<DocumentResponse> => {
   const response = await api.post('/update_node', {
     node_id: nodeId,
@@ -51,7 +59,7 @@ export const updateNodeStyle = async (
       font_size: fontSize,
       color: color,
     }
-  });
+  }, { params: { page } });
   return response.data as DocumentResponse;
 };
 
@@ -62,7 +70,8 @@ export const updateRangeStyle = async (
   endOffset: number,
   fontName?: string,
   fontSize?: number,
-  color?: string
+  color?: string,
+  page?: number
 ): Promise<DocumentResponse> => {
   const response = await api.post('/update_range', {
     start_node_id: startNodeId,
@@ -74,21 +83,21 @@ export const updateRangeStyle = async (
       font_size: fontSize,
       color: color,
     }
-  });
+  }, { params: { page } });
   return response.data as DocumentResponse;
 };
 
-export const undoDocument = async (): Promise<DocumentResponse> => {
-  const response = await api.post('/undo');
+export const undoDocument = async (page?: number): Promise<DocumentResponse> => {
+  const response = await api.post('/undo', undefined, { params: { page } });
   return response.data as DocumentResponse;
 };
 
-export const redoDocument = async (): Promise<DocumentResponse> => {
-  const response = await api.post('/redo');
+export const redoDocument = async (page?: number): Promise<DocumentResponse> => {
+  const response = await api.post('/redo', undefined, { params: { page } });
   return response.data as DocumentResponse;
 };
 
-export const uploadDocument = async (file: File): Promise<DocumentResponse> => {
+export const uploadDocument = async (file: File, page?: number): Promise<DocumentResponse> => {
   const formData = new FormData();
   formData.append('file', file);
   
@@ -96,6 +105,7 @@ export const uploadDocument = async (file: File): Promise<DocumentResponse> => {
     headers: {
       'Content-Type': 'multipart/form-data',
     },
+    params: { page },
   });
   return response.data as DocumentResponse;
 };

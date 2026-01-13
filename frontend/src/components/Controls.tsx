@@ -13,6 +13,11 @@ interface ControlsProps {
   onUndo: () => void;
   onRedo: () => void;
   onClearSelection?: () => void;
+  rangeEnabled?: boolean;
+  pageIndex?: number;
+  pageCount?: number;
+  onPrevPage?: () => void;
+  onNextPage?: () => void;
 }
 
 const Controls: React.FC<ControlsProps> = ({
@@ -27,6 +32,11 @@ const Controls: React.FC<ControlsProps> = ({
   onUndo,
   onRedo,
   onClearSelection,
+  rangeEnabled,
+  pageIndex,
+  pageCount,
+  onPrevPage,
+  onNextPage,
 }) => {
   const fonts = [
     { label: 'Arial', value: 'Arial' },
@@ -82,9 +92,40 @@ const Controls: React.FC<ControlsProps> = ({
         <div className="toolbar-spacer" />
 
         <div className="toolbar-group">
+          <button
+            type="button"
+            className="toolbar-button"
+            onClick={onPrevPage}
+            disabled={!!loading || !pageCount || !pageIndex || pageIndex <= 1}
+            title="上一页"
+          >
+            <span>上一页</span>
+          </button>
+          <button
+            type="button"
+            className="toolbar-button"
+            onClick={onNextPage}
+            disabled={!!loading || !pageCount || !pageIndex || pageIndex >= pageCount}
+            title="下一页"
+          >
+            <span>下一页</span>
+          </button>
+          <div className="toolbar-field" style={{ minWidth: 120 }}>
+            <label>页码</label>
+            <div style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: 6, background: '#fff' }}>
+              {pageIndex ?? 1} / {pageCount ?? 1}
+            </div>
+          </div>
+        </div>
+
+        <div className="toolbar-group">
           <div className="toolbar-field">
             <label>字体</label>
-            <select value={fontName} onChange={(e) => handleChange('fontName', e.target.value)}>
+            <select
+              value={fontName}
+              onChange={(e) => handleChange('fontName', e.target.value)}
+              disabled={!rangeEnabled || !!loading}
+            >
               {fonts.map((font) => (
                 <option key={font.value} value={font.value}>
                   {font.label}
@@ -101,12 +142,18 @@ const Controls: React.FC<ControlsProps> = ({
               min={8}
               max={72}
               onChange={(e) => handleChange('fontSize', e.target.value)}
+              disabled={!rangeEnabled || !!loading}
             />
           </div>
 
           <div className="toolbar-field">
             <label>颜色</label>
-            <input type="color" value={fontColor} onChange={(e) => handleChange('fontColor', e.target.value)} />
+            <input
+              type="color"
+              value={fontColor}
+              onChange={(e) => handleChange('fontColor', e.target.value)}
+              disabled={!rangeEnabled || !!loading}
+            />
           </div>
         </div>
       </div>

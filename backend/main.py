@@ -148,15 +148,64 @@ if not USE_MOCK:
                 print(f"Error loading document: {e}")
                 raise HTTPException(status_code=400, detail="Invalid document format")
 
-        def get_html(self):
+        def page_count(self) -> int:
+            try:
+                try:
+                    self.doc.update_page_layout()
+                except Exception:
+                    pass
+                c = int(getattr(self.doc, "page_count", 1) or 1)
+                return max(1, c)
+            except Exception:
+                return 1
+
+        def get_html(self, page: int | None = None):
+            if page is None:
+                options = aw.saving.HtmlSaveOptions()
+                options.export_images_as_base64 = True
+                options.css_style_sheet_type = aw.saving.CssStyleSheetType.INLINE
+                options.pretty_format = True
+
+                out_stream = io.BytesIO()
+                self.doc.save(out_stream, options)
+                return out_stream.getvalue().decode("utf-8")
+
+            total = self.page_count()
+            page = max(1, min(int(page), total))
             options = aw.saving.HtmlSaveOptions()
             options.export_images_as_base64 = True
             options.css_style_sheet_type = aw.saving.CssStyleSheetType.INLINE
             options.pretty_format = True
-            
+
             out_stream = io.BytesIO()
-            self.doc.save(out_stream, options)
-            return out_stream.getvalue().decode("utf-8")
+            try:
+                try:
+                    self.doc.update_page_layout()
+                except Exception:
+                    pass
+                page_doc = self.doc.extract_pages(page - 1, 1)
+                page_doc.save(out_stream, options)
+                return out_stream.getvalue().decode("utf-8")
+            except Exception:
+                try:
+                    out_stream = io.BytesIO()
+                    fixed = aw.saving.HtmlFixedSaveOptions()
+                    try:
+                        fixed.export_embedded_images = True
+                    except Exception:
+                        pass
+                    try:
+                        fixed.page_index = page - 1
+                        fixed.page_count = 1
+                    except Exception:
+                        try:
+                            fixed.page_set = aw.saving.PageSet(page - 1)
+                        except Exception:
+                            pass
+                    self.doc.save(out_stream, fixed)
+                    return out_stream.getvalue().decode("utf-8")
+                except Exception as e:
+                    raise HTTPException(status_code=500, detail=f"Failed to render page {page}: {e}")
         
         def get_document_stream(self):
             out_stream = io.BytesIO()
@@ -417,7 +466,10 @@ else:
                 "But I can simulate that the file was received successfully!"
             ]
 
-        def get_html(self):
+        def page_count(self) -> int:
+            return 1
+
+        def get_html(self, page: int | None = None):
             style = f"font-family: '{self.font_name}'; font-size: {self.font_size}pt; color: {self.color};"
             html_parts = ["<html><body>"]
             self.ids = []
@@ -451,40 +503,59 @@ else:
 doc_state = DocumentState()
 
 @app.get("/api/init")
-async def init_document():
+async def init_document(page: int = 1):
     doc_state.load_default()
-    return {"html": doc_state.get_html(), "history": doc_state.history()}
+    total = doc_state.page_count() if hasattr(doc_state, "page_count") else 1
+    page = max(1, min(int(page), total))
+    return {"html": doc_state.get_html(page), "history": doc_state.history(), "pageIndex": page, "pageCount": total}
+
+
+@app.get("/api/render")
+async def render_document(page: int = 1):
+    total = doc_state.page_count() if hasattr(doc_state, "page_count") else 1
+    page = max(1, min(int(page), total))
+    return {"html": doc_state.get_html(page), "history": doc_state.history(), "pageIndex": page, "pageCount": total}
 
 @app.post("/api/update")
-async def update_document(style: StyleUpdate):
+async def update_document(style: StyleUpdate, page: int = 1):
     doc_state.update_style(style.font_name, style.font_size, style.color)
-    return {"html": doc_state.get_html(), "history": doc_state.history()}
+    total = doc_state.page_count() if hasattr(doc_state, "page_count") else 1
+    page = max(1, min(int(page), total))
+    return {"html": doc_state.get_html(page), "history": doc_state.history(), "pageIndex": page, "pageCount": total}
 
 @app.post("/api/update_node")
-async def update_node(update: NodeUpdate):
+async def update_node(update: NodeUpdate, page: int = 1):
     doc_state.update_node_style(update.node_id, update.start_offset, update.end_offset, update.style)
-    return {"html": doc_state.get_html(), "history": doc_state.history()}
+    total = doc_state.page_count() if hasattr(doc_state, "page_count") else 1
+    page = max(1, min(int(page), total))
+    return {"html": doc_state.get_html(page), "history": doc_state.history(), "pageIndex": page, "pageCount": total}
 
 
 @app.post("/api/update_range")
-async def update_range(update: RangeUpdate):
+async def update_range(update: RangeUpdate, page: int = 1):
     doc_state.update_range_style(update.start_node_id, update.start_offset, update.end_node_id, update.end_offset, update.style)
-    return {"html": doc_state.get_html(), "history": doc_state.history()}
+    total = doc_state.page_count() if hasattr(doc_state, "page_count") else 1
+    page = max(1, min(int(page), total))
+    return {"html": doc_state.get_html(page), "history": doc_state.history(), "pageIndex": page, "pageCount": total}
 
 
 @app.post("/api/undo")
-async def undo_document():
+async def undo_document(page: int = 1):
     did_undo = doc_state.undo()
-    return {"html": doc_state.get_html(), "history": doc_state.history(), "didUndo": did_undo}
+    total = doc_state.page_count() if hasattr(doc_state, "page_count") else 1
+    page = max(1, min(int(page), total))
+    return {"html": doc_state.get_html(page), "history": doc_state.history(), "pageIndex": page, "pageCount": total, "didUndo": did_undo}
 
 
 @app.post("/api/redo")
-async def redo_document():
+async def redo_document(page: int = 1):
     did_redo = doc_state.redo()
-    return {"html": doc_state.get_html(), "history": doc_state.history(), "didRedo": did_redo}
+    total = doc_state.page_count() if hasattr(doc_state, "page_count") else 1
+    page = max(1, min(int(page), total))
+    return {"html": doc_state.get_html(page), "history": doc_state.history(), "pageIndex": page, "pageCount": total, "didRedo": did_redo}
 
 @app.post("/api/upload")
-async def upload_document(file: UploadFile = File(...)):
+async def upload_document(file: UploadFile = File(...), page: int = 1):
     content = await file.read()
     file_stream = io.BytesIO(content)
     snapshot = None
@@ -497,7 +568,9 @@ async def upload_document(file: UploadFile = File(...)):
     if snapshot is not None:
         doc_state._push_undo_snapshot(snapshot)
         doc_state.redo_stack.clear()
-    return {"html": doc_state.get_html(), "history": doc_state.history()}
+    total = doc_state.page_count() if hasattr(doc_state, "page_count") else 1
+    page = 1
+    return {"html": doc_state.get_html(page), "history": doc_state.history(), "pageIndex": page, "pageCount": total}
 
 @app.get("/api/download")
 async def download_document():
